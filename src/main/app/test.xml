@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ftp="http://www.mulesoft.org/schema/mule/ee/ftp" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/ee/ftp http://www.mulesoft.org/schema/mule/ee/ftp/current/mule-ftp-ee.xsd">
+    <http:listener-config name="HTTP_Listener_Configuration" host="0.0.0.0" port="8081" doc:name="HTTP Listener Configuration"/>
+    <flow name="splitflow">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/splitter" doc:name="HTTP"/>
+        <logger level="INFO" doc:name="Logger"/>
+        <json:json-to-object-transformer  doc:name="JSON to Object" returnClass="java.util.ArrayList"/>
+        <collection-splitter doc:name="Collection Splitter"/>
+        <dw:transform-message doc:name="Transform Message">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+{
+	"message": "Hello " ++ payload.Firstname
+}]]></dw:set-payload>
+        </dw:transform-message>
+        <collection-aggregator failOnTimeout="true" doc:name="Collection Aggregator"/>
+        <json:object-to-json-transformer doc:name="Object to JSON"/>
+        <logger level="INFO" doc:name="Logger"/>
+    </flow>
+        <flow name="removeDupicate">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/duplicate" doc:name="HTTP"/>
+        <logger level="INFO" doc:name="Logger"/>
+        <dw:transform-message doc:name="Transform Message" metadata:id="87867d54-3a77-44c7-b0c3-8712e3aa2c35">
+            <dw:input-payload mimeType="application/json"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+payload map {
+	firstname: $.Firstname,
+	lastname: $.Lastname
+} distinctBy $.firstname ]]></dw:set-payload>
+        </dw:transform-message>
+        <logger level="INFO" doc:name="Logger"/>
+    </flow>
+    <flow name="transform">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/maps" doc:name="HTTP"/>
+        <set-variable variableName="memberyear" value="2004" doc:name="Variable"/>
+        <dw:transform-message doc:name="Transform Message" metadata:id="3179db64-fb63-4e8d-8066-998e7bf47c2a">
+            <dw:input-payload mimeType="application/json"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+payload filter $.customer.membersince > flowVars.memberyear map {
+    customer: {
+      "name":$.customer.name,
+      "age":$.customer.age,		
+      "zip":$.customer.address.zipcode
+    }
+  }]]></dw:set-payload>
+        </dw:transform-message>
+        <logger message="#[payload]" level="INFO" doc:name="Logger"/>
+    </flow>
+</mule>
